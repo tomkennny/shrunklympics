@@ -457,7 +457,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       ] },
     { id: "afl", name: "Shrunk Sharpshooters", short: "Goalkicking", code: "AFL", table: STD, kicks: true,
       blurb: "Goal 6, behind 1, miss 0. Highest total wins; ties go to a head-to-head shoot-out.", desc: "An around-the-world AFL goal kicking competition, one shot from each of the five spots." },
-    { id: "golf", name: "The Albert Park Masters", short: "Mini Golf", code: "GOLF", table: GOLF, card: true,
+    { id: "golf", name: "The Albert Park Open", short: "Mini Golf", code: "GOLF", table: GOLF, card: true,
       blurb: "18 holes. Fewest total strokes wins; ties go to a putt-off.", desc: "The Shrunklympics finale. With double points on offer, who can hold their nerve?" },
   ];
   const E = Object.fromEntries(EVENTS.map(e => [e.id, e]));
@@ -757,7 +757,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
         <summary>Points system</summary>
         <div class="body">
           <p><b>Barista Battle, Lego Masters, Beer-io Kart and Shrunk Sharpshooters:</b> 5 points for 1st, 4 for 2nd, 3 for 3rd, 2 for 4th, 1 for 5th.</p>
-          <p><b>The Albert Park Masters (mini golf):</b> 10 for 1st, 8 for 2nd, 6 for 3rd, 4 for 4th, 1 for 5th, on total strokes over 18 holes. Ties are settled by a putt-off back in the office.</p>
+          <p><b>The Albert Park Open (mini golf):</b> 10 for 1st, 8 for 2nd, 6 for 3rd, 4 for 4th, 1 for 5th, on total strokes over 18 holes. Ties are settled by a putt-off back in the office.</p>
           <p><b>Barista Battle judging:</b> each competitor ranks the other four lattes from 1st to 4th on this site. The best average ranking received wins. If anyone is level, everyone not in the tie re-ranks just the tied lattes, and the best average in that re-vote wins.</p>
           <p><b>Shrunk Sharpshooters:</b> one shot from each pocket, each 45° and straight in front. A goal is 6, a behind 1, a miss 0. Highest total wins, and any tie is settled by a head-to-head shoot-out.</p>
           <p><b>Ties in Lego Masters and Beer-io Kart:</b> tied competitors split the points for the places they cover. Two people tied for 1st in a 5-4-3-2-1 event get 4.5 each.</p>
@@ -1284,7 +1284,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     const hasPar = par.some(v => typeof v === "number");
     panel.innerHTML = `<p class="eyebrow">Scorecard</p>
       <div class="scorecard">
-        <div class="sc-top"><span class="sc-title">Albert Park Masters Scorecard</span><span class="sc-status">Live from the organiser</span></div>
+        <div class="sc-top"><span class="sc-title">Albert Park Open Scorecard</span><span class="sc-status">Live from the organiser</span></div>
         ${rowsFor(0, false)}
         ${rowsFor(9, true)}
         <div class="sc-foot"><span class="sc-status">${hasPar ? "Circled scores are under par; boxed scores are over par." : "Strokes per hole, updated as the organiser enters them."}</span></div>
@@ -1307,7 +1307,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     };
     panel.innerHTML = `<p class="eyebrow">Organiser · scorecard</p>
       <div class="scorecard">
-        <div class="sc-top"><span class="sc-title">Albert Park Masters Scorecard</span><span class="sc-status" id="scStatus">Scores save as you type</span></div>
+        <div class="sc-top"><span class="sc-title">Albert Park Open Scorecard</span><span class="sc-status" id="scStatus">Scores save as you type</span></div>
         ${rowsFor(0, false)}
         ${rowsFor(9, true)}
         <div class="sc-foot">
