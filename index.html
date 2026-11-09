@@ -437,7 +437,12 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     { id: "coffee", name: "Barista Battle", short: "Barista Battle", code: "Coffee", table: STD, voted: true,
       blurb: "Every competitor ranks the other four lattes. Best average ranking wins.", desc: "Who is Shrunk's best latte artist?" },
     { id: "lego", name: "Lego Masters", short: "Lego Masters", code: "Lego", table: STD, mode: "time", unit: "time",
-      blurb: "Fastest complete build wins.", desc: "A lego build race for the ages." },
+      blurb: "Fastest complete build wins.", desc: "A lego build race for the ages.",
+      rules: [
+        { t: "Lego boxes mustn't be opened until the stopwatch has started." },
+        { t: "When you have finished your build, yell out your name. The stopwatch will pause and all remaining competitors must stop their builds until the completed build is confirmed & the stopwatch is restarted." },
+        { t: "Rinse & repeat until all competitors have finished." },
+      ] },
     { id: "kart", name: "Beer-io Kart", short: "Beer-io Kart", code: "Mario", table: STD, mode: "high", unit: "GP points",
       blurb: "Most Grand Prix points wins.", desc: "A Mario Kart Grand Prix, with the final race being played to Beer-io Kart rules.",
       rulesTitle: "Final race · Beer-io Kart rules",
