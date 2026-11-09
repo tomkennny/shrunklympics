@@ -20,5 +20,5 @@ window.SHRUNK_CONFIG = {
 
   // The organiser's User UID. Sign in once on the live site and it will show
   // you this ID to copy. Only this account sees the organiser controls.
-  organiserUid: "PASTE_ORGANISER_UID",
+  organiserUid: "1huMi0flAIQ8jKULWPQlUQwbPLD3",
 };
