@@ -243,6 +243,19 @@ button.btn:disabled { opacity: .45; cursor: not-allowed; }
 .matrix td, .matrix th { text-align: center; }
 .matrix td:first-child, .matrix th:first-child { text-align: left; }
 
+/* barista battle photos */
+.lattes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(130px, 40%), 1fr)); gap: 10px; margin-top: 10px; }
+.latte { display: grid; gap: 8px; align-content: start; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px; min-width: 0; }
+.latte-ph { aspect-ratio: 1; width: 100%; border-radius: 8px; overflow: hidden; background: #0d1520; display: grid; place-items: center; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 13px; }
+button.latte-ph { cursor: zoom-in; }
+.latte-ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.latte .btns { gap: 6px; }
+.latte button.btn { padding: 6px 10px; font-size: 12.5px; }
+#lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(4,7,12,.92); display: grid; place-items: center; padding: 16px; cursor: zoom-out; }
+#lightbox figure { margin: 0; display: grid; gap: 10px; justify-items: center; max-width: 100%; }
+#lightbox img { max-width: min(92vw, 900px); max-height: 80vh; border-radius: 10px; object-fit: contain; }
+#lightbox figcaption { color: var(--text); font-weight: 600; }
+
 /* golf scorecard */
 .scorecard {
   background: var(--card-paper); color: var(--card-ink); border-radius: 10px; padding: 14px 12px 12px;
@@ -484,7 +497,8 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     meCid: null,           // which competitor the signed-in person is
     acctDraft: null, unsubs: [],
     results: {}, votes: {}, tbvotes: {},
-    tbBallot: {},          // coffee tie-break ballots in progress, keyed by tie group
+    photos: {}, photoBusy: null, // Barista Battle photos (competitor id -> { src })
+    tbBallot: {},         // coffee tie-break ballots in progress, keyed by tie group
     coffeeTbDraft: {},     // organiser's manual tie-break order in progress
     view: "overall",
     adminDraft: {},
@@ -821,7 +835,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       </section>
       ${ev.rules ? `<section class="panel"><p class="eyebrow">${esc(ev.rulesTitle || "Rules")}</p><ul class="rulelist">${ev.rules.map(r => `<li class="${r.hot ? "hot" : ""}">${esc(r.t)}</li>`).join("")}</ul></section>` : ""}
       <section class="panel"><p class="eyebrow">Standings</p><div id="evTable"></div></section>
-      ${ev.voted ? `<section class="panel" id="ballotPanel"></section>` : ""}
+      ${ev.voted ? `<section class="panel" id="photoPanel"></section><section class="panel" id="ballotPanel"></section>` : ""}
       ${ev.kicks ? `<section class="panel" id="kickPanel"></section>` : ""}
       <section class="panel" id="adminPanel" hidden></section>`;
     refreshEvent(true);
@@ -832,10 +846,84 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     const s = eventStanding(ev);
     $("#evPill").innerHTML = pill(s.status);
     $("#evTable").innerHTML = standingsTable(ev, s);
-    if (ev.voted) renderBallot(s, full);
+    if (ev.voted) { renderPhotos(full); renderBallot(s, full); }
     if (ev.kicks) renderKickCard(s);
     renderAdmin(ev, s, full);
   }
+
+  // ----- barista battle photos -----
+  function renderPhotos(full) {
+    const panel = $("#photoPanel"); if (!panel) return;
+    const sig = [S.organiser ? "o" : "c", S.photoBusy || "", ...COMPETITORS.map(c => (S.photos[c.id] && S.photos[c.id].at) || "")].join("|");
+    if (!full && panel.dataset.sig === sig) return; // nothing changed, so leave the images alone
+    panel.dataset.sig = sig;
+    const any = COMPETITORS.some(c => okPhoto(S.photos[c.id]));
+    const cards = COMPETITORS.map(c => {
+      const p = okPhoto(S.photos[c.id]) ? S.photos[c.id] : null; const busy = S.photoBusy === c.id;
+      const pic = p
+        ? `<button type="button" class="latte-ph" data-view="${c.id}" aria-label="See ${esc(c.name)}'s latte larger"><img src="${p.src}" alt="${esc(c.name)}'s latte"></button>`
+        : `<div class="latte-ph">${busy ? "Uploading…" : "No photo yet"}</div>`;
+      const tools = S.organiser ? `<div class="btns">
+          <button class="btn" type="button" data-up="${c.id}" ${S.photoBusy ? "disabled" : ""}>${busy ? "Uploading…" : p ? "Replace" : "Add photo"}</button>
+          ${p ? `<button class="btn danger" type="button" data-rm="${c.id}" ${S.photoBusy ? "disabled" : ""}>Remove</button>` : ""}</div>` : "";
+      return `<div class="latte">${pic}${whoHTML(c)}${tools}</div>`;
+    }).join("");
+    panel.innerHTML = `<p class="eyebrow">The lattes</p>
+      ${S.organiser ? `<p class="muted small">Add a photo of each latte. Everyone sees them here while they vote.</p>`
+        : any ? `<p class="muted small">Tap a photo to see it larger.</p>`
+        : `<p class="empty">Photos of each latte will appear here once the organiser adds them.</p>`}
+      ${S.organiser || any ? `<div class="lattes">${cards}</div>` : ""}
+      ${S.organiser ? `<input type="file" accept="image/*" id="photoFile" hidden>` : ""}`;
+    panel.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => openPhoto(b.dataset.view)));
+    if (!S.organiser) return;
+    const file = $("#photoFile");
+    panel.querySelectorAll("[data-up]").forEach(b => b.addEventListener("click", () => { file.dataset.cid = b.dataset.up; file.value = ""; file.click(); }));
+    file.addEventListener("change", async () => {
+      const cid = file.dataset.cid, f = file.files && file.files[0]; if (!cid || !f || !S.db) return;
+      S.photoBusy = cid; renderPhotos(true);
+      try {
+        const src = await shrinkPhoto(f);
+        await S.db.doc("photos/" + cid).set({ src, by: S.uid || null, at: new Date().toISOString() });
+        toast(`${C[cid].name}'s photo added`);
+      } catch (e) { if (e && e.code) writeFailed(e); else toast("Couldn't read that photo. Try a different one.", true); }
+      S.photoBusy = null; renderPhotos(true);
+    });
+    panel.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", async () => {
+      const cid = b.dataset.rm;
+      if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Confirm"; return; }
+      b.disabled = true;
+      try { await S.db.doc("photos/" + cid).delete(); toast(`${C[cid].name}'s photo removed`); }
+      catch (e) { writeFailed(e); b.disabled = false; }
+    }));
+  }
+  // Shrink a phone photo so it fits comfortably in one database record (well under 1 MB).
+  async function shrinkPhoto(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const im = new Image(); im.src = url; await im.decode();
+      for (const max of [1280, 1000, 800, 600]) {
+        const sc = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+        const cv = document.createElement("canvas"); cv.width = Math.round(im.naturalWidth * sc); cv.height = Math.round(im.naturalHeight * sc);
+        const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(im, 0, 0, cv.width, cv.height);
+        for (const q of [0.82, 0.7, 0.6]) { const d = cv.toDataURL("image/jpeg", q); if (d.length < 700000) return d; }
+      }
+      throw new Error("too big");
+    } finally { URL.revokeObjectURL(url); }
+  }
+  // Only show image data the site itself produced.
+  function okPhoto(p) { return !!p && typeof p.src === "string" && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.src); }
+  function openPhoto(cid) {
+    const p = S.photos[cid]; if (!okPhoto(p)) return;
+    closePhoto();
+    const box = document.createElement("div");
+    box.id = "lightbox"; box.tabIndex = -1;
+    box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", `${C[cid].name}'s latte`);
+    box.innerHTML = `<figure><img src="${p.src}" alt="${esc(C[cid].name)}'s latte"><figcaption>${esc(C[cid].name)} · tap to close</figcaption></figure>`;
+    box.addEventListener("click", closePhoto);
+    document.body.appendChild(box); box.focus();
+  }
+  function closePhoto() { const b = $("#lightbox"); if (b) b.remove(); }
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closePhoto(); });
 
   // ----- coffee ballot (ranking) -----
   function renderBallot(s, full) {
@@ -1497,7 +1585,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
   function route() {
     const h = (location.hash || "").replace("#", "");
     S.view = h === "overall" || E[h] ? h : "overall";
-    renderTabs(); setArt();
+    closePhoto(); renderTabs(); setArt();
     if (S.view === "overall") renderOverall(); else renderEvent(S.view);
     renderAccounts(true);
   }
@@ -1577,7 +1665,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
   }
   function stopListening() {
     S.unsubs.forEach(f => { try { f(); } catch (e) {} });
-    Object.assign(S, { unsubs: [], db: null, results: {}, votes: {}, tbvotes: {}, players: {}, meCid: null, organiser: false,
+    Object.assign(S, { unsubs: [], db: null, results: {}, votes: {}, tbvotes: {}, players: {}, photos: {}, photoBusy: null, meCid: null, organiser: false,
       golf: null, kick: null, adminDraft: {}, acctDraft: null, tbBallot: {}, tbDraft: {}, coffeeTbDraft: {}, ballot: { judge: null, order: [], dirty: false } });
   }
   function showGate(kind, email) {
@@ -1647,6 +1735,11 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       const v = {}; snap.docs.forEach(d => { if (d.exists) v[d.id] = d.data(); }); S.tbvotes = v;
       onData();
     }, stopped));
+    // Photos are optional: if they can't load (for example, before the new database rules are published), the rest keeps working.
+    S.unsubs.push(db.collection("photos").onSnapshot(snap => {
+      const p = {}; snap.docs.forEach(d => { if (d.exists) p[d.id] = d.data(); }); S.photos = p;
+      onData();
+    }, err => { console.warn("Photos unavailable:", err && err.code); S.photos = {}; onData(); }));
     S.unsubs.push(db.doc("meta/players").onSnapshot(d => {
       S.players = d.exists ? (d.data() || {}) : {};
       computeMe(); onData();
