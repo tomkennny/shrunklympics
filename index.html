@@ -446,7 +446,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
   ];
   const C = Object.fromEntries(COMPETITORS.map(c => [c.id, c]));
   const STD = [5, 4, 3, 2, 1];
-  const GOLF = [10, 8, 6, 4, 1];
+  const GOLF = [10, 8, 6, 4, 2];
   const HOLES = 18;
   const EVENTS = [
     { id: "coffee", name: "Barista Battle", short: "Barista Battle", code: "Coffee", table: STD, voted: true,
@@ -458,6 +458,8 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
         { t: "When you have finished your build, yell out your name. The stopwatch will pause and all remaining competitors must stop their builds until the completed build is confirmed & the stopwatch is restarted." },
         { t: "Rinse & repeat until all competitors have finished." },
       ] },
+    { id: "afl", name: "Shrunk Sharpshooters", short: "Goalkicking", code: "AFL", table: STD, kicks: true,
+      blurb: "Goal 6, behind 1, miss 0. Highest total wins; ties go to a head-to-head shoot-out.", desc: "An around-the-world AFL goal kicking competition, one shot from each of the five spots." },
     { id: "kart", name: "Beer-io Kart", short: "Beer-io Kart", code: "Mario", table: STD, mode: "high", unit: "GP points",
       blurb: "Most Grand Prix points wins.", desc: "A Mario Kart Grand Prix, with the final race being played to Beer-io Kart rules.",
       rulesTitle: "Final race · Beer-io Kart rules",
@@ -468,8 +470,6 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
         { t: "Getting hit by an item (shell, banana etc.) requires you to take a big gulp of your drink." },
         { t: "Last place finisher is required to do a shot chosen by the winner." },
       ] },
-    { id: "afl", name: "Shrunk Sharpshooters", short: "Goalkicking", code: "AFL", table: STD, kicks: true,
-      blurb: "Goal 6, behind 1, miss 0. Highest total wins; ties go to a head-to-head shoot-out.", desc: "An around-the-world AFL goal kicking competition, one shot from each of the five spots." },
     { id: "golf", name: "The Albert Park Open", short: "Mini Golf", code: "GOLF", table: GOLF, card: true,
       blurb: "18 holes. Fewest total strokes wins; ties go to a putt-off.", desc: "The Shrunklympics finale. With double points on offer, who can hold their nerve?" },
   ];
@@ -710,11 +710,23 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       const s = eventStanding(ev); st[ev.id] = s;
       if (s.status === "final") s.rows.forEach(r => { per[r.cid][ev.id] = r.pts; tot[r.cid] += r.pts || 0; });
     });
-    const rows = rankAndScore(tot, "high", [1, 1, 1, 1, 1], true).map(r => ({ ...r, total: tot[r.cid], per: per[r.cid] }));
-    rows.sort((a, b) => (b.total - a.total) || wins(b.cid, st) - wins(a.cid, st) || C[a.cid].name.localeCompare(C[b.cid].name));
+    // Countback for level totals: most 1st places, then most 2nds, 3rds, 4ths, 5ths across final events,
+    // then the better Mini Golf finish (golf ties go to a putt-off, so its places are always separate).
+    const countback = {};
+    COMPETITORS.forEach(c => {
+      const v = [0, 0, 0, 0, 0];
+      EVENTS.forEach(ev => {
+        if (st[ev.id].status !== "final") return;
+        const r = st[ev.id].rows.find(x => x.cid === c.id);
+        if (r && r.place >= 1 && r.place <= 5) v[r.place - 1]++;
+      });
+      const g = st.golf && st.golf.status === "final" ? st.golf.rows.find(x => x.cid === c.id) : null;
+      v.push(g && g.place ? 6 - g.place : 0);
+      countback[c.id] = v;
+    });
+    const rows = rankAndScore(tot, "high", [1, 1, 1, 1, 1], true, countback).map(r => ({ ...r, total: tot[r.cid], per: per[r.cid] }));
     return { rows, st };
   }
-  function wins(cid, st) { return EVENTS.filter(ev => st[ev.id].status === "final" && st[ev.id].rows.some(r => r.cid === cid && r.place === 1)).length; }
 
   // ---------- rendering ----------
   const STATUS_LABEL = { upcoming: "Not started", live: "In progress", final: "Final" };
@@ -730,11 +742,10 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     const { rows, st } = overall();
     const finals = EVENTS.filter(e => st[e.id].status === "final").length;
     const leaders = rows.filter(r => r.place === 1).map(r => C[r.cid].name);
-    const leaderTotal = rows[0].total;
     const head = EVENTS.map(e => `<th class="num" title="${esc(e.name)}">${e.code}</th>`).join("");
     const body = rows.map(r => {
       const c = C[r.cid];
-      const lead = finals > 0 && r.total === leaderTotal;
+      const lead = finals > 0 && r.place === 1;
       const cells = EVENTS.map(e => { const p = r.per[e.id]; return `<td class="num ev ${p == null ? "none" : ""}">${fmtPts(p)}</td>`; }).join("");
       return `<tr class="p${r.place} ${lead ? "lead" : ""}"><td class="place">${finals ? placeLabel(r.place, r.tied) : "–"}</td><td>${whoHTML(c)}</td>${cells}<td class="num pts">${fmtPts(r.total)}</td></tr>`;
     }).join("");
@@ -761,7 +772,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
           <thead><tr><th>#</th><th>Competitor</th>${head}<th class="num">Pts</th></tr></thead>
           <tbody>${body}</tbody>
         </table></div>
-        <p class="muted small">Points count once an event is final. Ties on the overall board are listed by number of event wins.</p>
+        <p class="muted small">Points count once an event is final. If competitors are level on points, whoever has more event wins ranks higher. If they're still level, it goes to most 2nd places, then most 3rd places, and so on. After that, the better Mini Golf finish wins.</p>
       </section>
       <section>
         <p class="eyebrow">Events</p>
@@ -770,11 +781,12 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       <details class="rules" id="rulesBox">
         <summary>Points system</summary>
         <div class="body">
-          <p><b>Barista Battle, Lego Masters, Beer-io Kart and Shrunk Sharpshooters:</b> 5 points for 1st, 4 for 2nd, 3 for 3rd, 2 for 4th, 1 for 5th.</p>
-          <p><b>The Albert Park Open (mini golf):</b> 10 for 1st, 8 for 2nd, 6 for 3rd, 4 for 4th, 1 for 5th, on total strokes over 18 holes. Ties are settled by a putt-off back in the office.</p>
+          <p><b>Barista Battle, Lego Masters, Shrunk Sharpshooters and Beer-io Kart:</b> 5 points for 1st, 4 for 2nd, 3 for 3rd, 2 for 4th, 1 for 5th.</p>
+          <p><b>The Albert Park Open (mini golf):</b> 10 for 1st, 8 for 2nd, 6 for 3rd, 4 for 4th, 2 for 5th, on total strokes over 18 holes. Ties are settled by a putt-off back in the office.</p>
           <p><b>Barista Battle judging:</b> each competitor ranks the other four lattes from 1st to 4th on this site. The best average ranking received wins. If anyone is level, everyone not in the tie re-ranks just the tied lattes, and the best average in that re-vote wins.</p>
           <p><b>Shrunk Sharpshooters:</b> one shot from each pocket, each 45° and straight in front. A goal is 6, a behind 1, a miss 0. Highest total wins, and any tie is settled by a head-to-head shoot-out.</p>
           <p><b>Ties in Lego Masters and Beer-io Kart:</b> tied competitors split the points for the places they cover. Two people tied for 1st in a 5-4-3-2-1 event get 4.5 each.</p>
+          <p><b>Ties on the overall leaderboard:</b> competitors level on points are separated by most event wins, then most 2nd places, then most 3rd places, and so on. If they're still level, the better Mini Golf finish ranks higher.</p>
         </div>
       </details>`;
     $("#main").querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { location.hash = b.dataset.go; }));
