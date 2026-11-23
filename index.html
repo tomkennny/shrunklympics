@@ -264,6 +264,7 @@ button.latte-ph { cursor: zoom-in; }
 .sc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 0 4px; }
 .sc-title { font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: .08em; text-transform: uppercase; color: var(--card-head); }
 .sc-status { font-size: 13px; color: #5c6b55; }
+.sc-course { font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--card-head); padding: 6px 4px 0; border-top: 1px solid var(--card-rule); }
 .sc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .sc { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
 .sc th, .sc td { border-bottom: 1px solid var(--card-rule); border-right: 1px solid var(--card-rule); padding: 0; text-align: center; color: var(--card-ink); white-space: nowrap; }
@@ -447,7 +448,11 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
   const C = Object.fromEntries(COMPETITORS.map(c => [c.id, c]));
   const STD = [5, 4, 3, 2, 1];
   const GOLF = [10, 8, 6, 4, 2];
-  const HOLES = 18;
+  // Mini golf courses, 18 holes each. One unnamed course = a normal 18-hole round.
+  // For 36 holes, list both course names, e.g. ["The Lake Course", "The Outback Course"].
+  const GOLF_COURSES = [""];
+  const HOLES = 18 * GOLF_COURSES.length;
+  const GOLF_WHERE = GOLF_COURSES.length > 1 ? ` across ${GOLF_COURSES.join(" and ")}` : "";
   const EVENTS = [
     { id: "coffee", name: "Barista Battle", short: "Barista Battle", code: "Coffee", table: STD, voted: true,
       blurb: "Every competitor ranks the other four lattes. Best average ranking wins.", desc: "Who is Shrunk's best latte artist?" },
@@ -471,7 +476,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
         { t: "Last place finisher is required to do a shot chosen by the winner." },
       ] },
     { id: "golf", name: "The Albert Park Open", short: "Mini Golf", code: "GOLF", table: GOLF, card: true,
-      blurb: "18 holes. Fewest total strokes wins; ties go to a putt-off.", desc: "The Shrunklympics finale. With double points on offer, who can hold their nerve?" },
+      blurb: `${HOLES} holes${GOLF_WHERE}. Fewest total strokes wins; ties go to a putt-off.`, desc: "The Shrunklympics finale. With double points on offer, who can hold their nerve?" },
   ];
   const E = Object.fromEntries(EVENTS.map(e => [e.id, e]));
   const MODES = {
@@ -590,7 +595,8 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       count[c.id] = got.length;
       places[c.id] = [1, 2, 3, 4].map(p => got.filter(x => x === p).length);
     });
-    const done = judges.length > 0 && (closed || judges.length === COMPETITORS.length);
+    // Results (and any tie-break) only start once the organiser closes voting.
+    const done = judges.length > 0 && closed;
     // Ties on average rank go to a re-vote by everyone not in the tie.
     const groups = [];
     if (done) {
@@ -782,7 +788,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
         <summary>Points system</summary>
         <div class="body">
           <p><b>Barista Battle, Lego Masters, Shrunk Sharpshooters and Beer-io Kart:</b> 5 points for 1st, 4 for 2nd, 3 for 3rd, 2 for 4th, 1 for 5th.</p>
-          <p><b>The Albert Park Open (mini golf):</b> 10 for 1st, 8 for 2nd, 6 for 3rd, 4 for 4th, 2 for 5th, on total strokes over 18 holes. Ties are settled by a putt-off back in the office.</p>
+          <p><b>The Albert Park Open (mini golf):</b> 10 for 1st, 8 for 2nd, 6 for 3rd, 4 for 4th, 2 for 5th, on total strokes over ${HOLES} holes${esc(GOLF_WHERE)}. Ties are settled by a putt-off back in the office.</p>
           <p><b>Barista Battle judging:</b> each competitor ranks the other four lattes from 1st to 4th on this site. The best average ranking received wins. If anyone is level, everyone not in the tie re-ranks just the tied lattes, and the best average in that re-vote wins.</p>
           <p><b>Shrunk Sharpshooters:</b> one shot from each pocket, each 45° and straight in front. A goal is 6, a behind 1, a miss 0. Highest total wins, and any tie is settled by a head-to-head shoot-out.</p>
           <p><b>Ties in Lego Masters and Beer-io Kart:</b> tied competitors split the points for the places they cover. Two people tied for 1st in a 5-4-3-2-1 event get 4.5 each.</p>
@@ -794,6 +800,11 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
 
   function standingsTable(ev, s) {
     const unitHead = ev.voted ? "Avg rank" : ev.card ? "Strokes" : ev.kicks ? "Score" : (s.mode === "time" ? "Time" : s.mode === "place" ? "Finished" : (esc(s.cfg.unit) || "Score"));
+    // Barista Battle: keep everyone's scores (organiser's included) hidden until the organiser closes voting.
+    if (ev.voted && !s.d.done) {
+      const hidden = COMPETITORS.map(c => `<tr><td class="place">–</td><td>${whoHTML(c)}</td><td class="num"><span class="muted">Hidden</span></td><td class="num pts">–</td></tr>`).join("");
+      return `<div class="tscroll"><table><thead><tr><th>#</th><th>Competitor</th><th class="num">${unitHead}</th><th class="num">Pts</th></tr></thead><tbody>${hidden}</tbody></table></div><p class="muted small">Scores stay hidden until the organiser closes voting. ${s.d.judges.length} of 5 votes in.</p>`;
+    }
     const body = s.rows.map(r => {
       const c = C[r.cid];
       let raw;
@@ -819,7 +830,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       const lead = r.place === 1 && s.status !== "upcoming";
       return `<tr class="p${r.place || 0} ${lead ? "lead" : ""}"><td class="place">${placeLabel(r.place, r.tied)}</td><td>${whoHTML(c)}</td><td class="num">${raw}</td><td class="num pts">${showPts}</td></tr>`;
     }).join("");
-    const lockMsg = ev.voted ? "all five judges have voted or voting is closed" : ev.card ? "everyone has finished all 18 holes" : ev.kicks ? "all 25 kicks are in and any ties are settled" : "all five scores are in";
+    const lockMsg = ev.voted ? "voting is closed" : ev.card ? `everyone has finished all ${HOLES} holes` : ev.kicks ? "all 25 kicks are in and any ties are settled" : "all five scores are in";
     if (ev.voted && s.status === "live" && s.d.done) {
       const list = s.d.groups.filter(x => !x.order).map(x => `${x.g.map(id => C[id].name).join(" & ")} (${x.avg.toFixed(2)})`).join("; ");
       return `<div class="tscroll"><table><thead><tr><th>#</th><th>Competitor</th><th class="num">${unitHead}</th><th class="num">Pts</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted small">Tie-break vote underway: ${esc(list)}. Points lock in once it's decided.</p>`;
@@ -954,7 +965,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       <ol class="slots">${[0, 1, 2, 3].map(i => { const cid = order[i]; return `<li class="slot ${cid ? "filled" : ""}"><span class="slot-place">${ORD[i]}</span>${cid ? whoHTML(C[cid]) : `<span class="muted small">Empty</span>`}</li>`; }).join("")}</ol>
       <div class="pool" role="group" aria-label="Competitors to rank">${others.map(c => { const i = order.indexOf(c.id); return `<button type="button" class="pick" data-c="${c.id}" aria-pressed="${i >= 0}">${monoHTML(c)}<span class="nm">${esc(c.name)}</span><span class="pick-place">${i >= 0 ? ORD[i] : ""}</span></button>`; }).join("")}</div>`
       : `<p class="empty">${S.organiser ? "Pick a name to enter a ranking on their behalf." : "Your Google account isn't linked to a competitor, so you can watch but not vote. Ask the organiser to add your email."}</p>`;
-    const breakdown = d.closed || d.judges.length === COMPETITORS.length ? matrixHTML(d) : "";
+    const breakdown = d.closed ? matrixHTML(d) : "";
     panel.innerHTML = `
       <div class="ballot">
         <div><p class="eyebrow">Judging</p><div class="judges" id="judgeChips">${chips}</div></div>
@@ -1035,7 +1046,6 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     const j = S.ballot.judge; if (!j) return { locked: true, msg: "" };
     if (!S.db) return { locked: true, msg: "Connecting to the scoreboard…" };
     if (d.closed) return { locked: true, msg: "Voting is closed." };
-    if (d.done && !S.organiser) return { locked: true, msg: "Main voting is complete." };
     const v = S.votes[j];
     return { locked: false, msg: "" };
   }
@@ -1088,7 +1098,7 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     const d = s.d;
     panel.innerHTML = `<p class="eyebrow">Organiser</p>
       <div class="formgrid">
-        <p class="muted small">${d.closed ? "Voting is closed and results are final." : `Voting is open. Results lock in automatically when all five judges have voted, or close voting now to finalise with ${d.judges.length} of 5 judges.`}</p>
+        <p class="muted small">${d.closed ? "Voting is closed and results are final." : `Voting is open with ${d.judges.length} of 5 judges in. Scores stay hidden from everyone, you included, until you close voting. Close it once everyone has voted to reveal the results.`}</p>
         <div class="btns">
           ${d.closed ? `<button class="btn" id="reopen" type="button">Reopen voting</button>` : `<button class="btn primary" id="closeV" type="button" ${d.judges.length ? "" : "disabled"}>Close voting</button>`}
           <select id="clearJudge" style="width:auto"><option value="">Clear a judge's ranking…</option>${d.judges.map(j => `<option value="${j}">${esc(C[j].name)}</option>`).join("")}</select>
@@ -1361,15 +1371,21 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
       try { await save(tb); toast("Putt-off result cleared"); } catch (err) { writeFailed(err); }
     }));
   }
+  function golfCourses(rowsFor) {
+    return GOLF_COURSES.map((name, ci) => {
+      const base = ci * 18;
+      return `${GOLF_COURSES.length > 1 ? `<div class="sc-course">${esc(name)}</div>` : ""}${rowsFor(base, false, base, ci)}${rowsFor(base + 9, true, base, ci)}`;
+    }).join("");
+  }
   function renderGolfReadOnly(panel) {
     const g = S.results.golf || {};
     const par = Array.isArray(g.par) ? g.par : [];
     const num = v => typeof v === "number" ? v : null;
     const part = (arr, a, b) => { const xs = arr.slice(a, b).map(num).filter(v => v != null); return xs.length ? sum(xs) : ""; };
-    const rowsFor = (start, isBack) => {
+    const rowsFor = (start, isBack, base) => {
       const idx = Array.from({ length: 9 }, (_, i) => start + i);
-      const head = `<tr><th class="nm" scope="col">Hole</th>${idx.map(h => `<th scope="col">${h + 1}</th>`).join("")}<th class="sumh">${isBack ? "In" : "Out"}</th>${isBack ? `<th class="sumh">Tot</th>` : ""}</tr>`;
-      const parRow = `<tr class="par"><td class="nm">Par</td>${idx.map(h => `<td class="ro">${num(par[h]) ?? ""}</td>`).join("")}<td class="sum">${part(par, start, start + 9)}</td>${isBack ? `<td class="sum">${part(par, 0, 18)}</td>` : ""}</tr>`;
+      const head = `<tr><th class="nm" scope="col">Hole</th>${idx.map(h => `<th scope="col">${h - base + 1}</th>`).join("")}<th class="sumh">${isBack ? "In" : "Out"}</th>${isBack ? `<th class="sumh">Tot</th>` : ""}</tr>`;
+      const parRow = `<tr class="par"><td class="nm">Par</td>${idx.map(h => `<td class="ro">${num(par[h]) ?? ""}</td>`).join("")}<td class="sum">${part(par, start, start + 9)}</td>${isBack ? `<td class="sum">${part(par, base, base + 18)}</td>` : ""}</tr>`;
       const players = COMPETITORS.map(c => {
         const a = (g.holes && Array.isArray(g.holes[c.id])) ? g.holes[c.id] : [];
         const cells = idx.map(h => {
@@ -1377,16 +1393,19 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
           const cls = v == null || pr == null ? "" : v < pr ? " under" : v > pr ? " over" : "";
           return `<td class="ro${cls}">${v == null ? "" : `<span>${v}</span>`}</td>`;
         }).join("");
-        return `<tr><td class="nm">${whoHTML(c)}</td>${cells}<td class="sum">${part(a, start, start + 9)}</td>${isBack ? `<td class="sum">${part(a, 0, 18)}</td>` : ""}</tr>`;
+        return `<tr><td class="nm">${whoHTML(c)}</td>${cells}<td class="sum">${part(a, start, start + 9)}</td>${isBack ? `<td class="sum">${part(a, base, base + 18)}</td>` : ""}</tr>`;
       }).join("");
       return `<div class="sc-scroll"><table class="sc"><thead>${head}</thead><tbody>${parRow}${players}</tbody></table></div>`;
     };
+    const grand = GOLF_COURSES.length < 2 ? "" : `<div class="sc-course">${HOLES}-hole totals</div><div class="sc-scroll"><table class="sc"><thead><tr><th class="nm" scope="col">Player</th>${GOLF_COURSES.map(n => `<th class="sumh" scope="col">${esc(n.replace(/^The /, "").replace(/ Course$/, ""))}</th>`).join("")}<th class="sumh" scope="col">Total</th></tr></thead><tbody>
+      ${[["par", par, "Par"], ...COMPETITORS.map(c => [c.id, (g.holes && Array.isArray(g.holes[c.id])) ? g.holes[c.id] : [], null])].map(([k, a, lbl]) => `<tr class="${k === "par" ? "par" : ""}"><td class="nm">${lbl || whoHTML(C[k])}</td>${GOLF_COURSES.map((_, ci) => `<td class="sum">${part(a, ci * 18, ci * 18 + 18)}</td>`).join("")}<td class="sum">${part(a, 0, HOLES)}</td></tr>`).join("")}
+    </tbody></table></div>`;
     const hasPar = par.some(v => typeof v === "number");
     panel.innerHTML = `<p class="eyebrow">Scorecard</p>
       <div class="scorecard">
         <div class="sc-top"><span class="sc-title">Albert Park Open Scorecard</span><span class="sc-status">Live from the organiser</span></div>
-        ${rowsFor(0, false)}
-        ${rowsFor(9, true)}
+        ${golfCourses(rowsFor)}
+        ${grand}
         <div class="sc-foot"><span class="sc-status">${hasPar ? "Circled scores are under par; boxed scores are over par." : "Strokes per hole, updated as the organiser enters them."}</span></div>
         <div id="golfTbBox"></div>
       </div>`;
@@ -1398,20 +1417,25 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     if ((busy || editing) && panel.querySelector(".scorecard")) { updateGolfSums(); renderGolfTieBreak(true); return; }
     const keepStatus = S.golf ? S.golf.status : "";
     if (!busy) { S.golf = golfFromStore(); S.golf.status = keepStatus; }
-    const rowsFor = (start, isBack) => {
+    const rowsFor = (start, isBack, base, ci) => {
       const idx = Array.from({ length: 9 }, (_, i) => start + i);
-      const head = `<tr><th class="nm" scope="col">Hole</th>${idx.map(h => `<th scope="col">${h + 1}</th>`).join("")}<th class="sumh">${isBack ? "In" : "Out"}</th>${isBack ? `<th class="sumh">Tot</th>` : ""}</tr>`;
-      const parRow = `<tr class="par"><td class="nm">Par</td>${idx.map(h => `<td><input data-k="par" data-h="${h}" value="${esc(S.golf.par[h])}" inputmode="numeric" maxlength="2" aria-label="Par hole ${h + 1}" autocomplete="off"></td>`).join("")}<td class="sum" data-sum="par-${isBack ? "in" : "out"}"></td>${isBack ? `<td class="sum" data-sum="par-tot"></td>` : ""}</tr>`;
-      const players = COMPETITORS.map(c => `<tr><td class="nm">${whoHTML(c)}</td>${idx.map(h => `<td><input data-k="${c.id}" data-h="${h}" value="${esc(S.golf.holes[c.id][h])}" inputmode="numeric" maxlength="2" aria-label="${esc(c.name)} hole ${h + 1}" autocomplete="off"></td>`).join("")}<td class="sum" data-sum="${c.id}-${isBack ? "in" : "out"}"></td>${isBack ? `<td class="sum" data-sum="${c.id}-tot"></td>` : ""}</tr>`).join("");
+      const tag = `${ci}-${isBack ? "in" : "out"}`;
+      const head = `<tr><th class="nm" scope="col">Hole</th>${idx.map(h => `<th scope="col">${h - base + 1}</th>`).join("")}<th class="sumh">${isBack ? "In" : "Out"}</th>${isBack ? `<th class="sumh">Tot</th>` : ""}</tr>`;
+      const where = GOLF_COURSES.length > 1 ? `${GOLF_COURSES[ci]} ` : "";
+      const parRow = `<tr class="par"><td class="nm">Par</td>${idx.map(h => `<td><input data-k="par" data-h="${h}" value="${esc(S.golf.par[h])}" inputmode="numeric" maxlength="2" aria-label="Par ${esc(where)}hole ${h - base + 1}" autocomplete="off"></td>`).join("")}<td class="sum" data-sum="par-${tag}"></td>${isBack ? `<td class="sum" data-sum="par-${ci}-tot"></td>` : ""}</tr>`;
+      const players = COMPETITORS.map(c => `<tr><td class="nm">${whoHTML(c)}</td>${idx.map(h => `<td><input data-k="${c.id}" data-h="${h}" value="${esc(S.golf.holes[c.id][h])}" inputmode="numeric" maxlength="2" aria-label="${esc(c.name)} ${esc(where)}hole ${h - base + 1}" autocomplete="off"></td>`).join("")}<td class="sum" data-sum="${c.id}-${tag}"></td>${isBack ? `<td class="sum" data-sum="${c.id}-${ci}-tot"></td>` : ""}</tr>`).join("");
       return `<div class="sc-scroll"><table class="sc"><thead>${head}</thead><tbody>${parRow}${players}</tbody></table></div>`;
     };
+    const grand = GOLF_COURSES.length < 2 ? "" : `<div class="sc-course">${HOLES}-hole totals</div><div class="sc-scroll"><table class="sc"><thead><tr><th class="nm" scope="col">Player</th>${GOLF_COURSES.map(n => `<th class="sumh" scope="col">${esc(n.replace(/^The /, "").replace(/ Course$/, ""))}</th>`).join("")}<th class="sumh" scope="col">Total</th></tr></thead><tbody>
+      ${["par", ...COMPETITORS.map(c => c.id)].map(k => `<tr class="${k === "par" ? "par" : ""}"><td class="nm">${k === "par" ? "Par" : whoHTML(C[k])}</td>${GOLF_COURSES.map((_, ci) => `<td class="sum" data-sum="${k}-${ci}-tot"></td>`).join("")}<td class="sum" data-sum="${k}-all"></td></tr>`).join("")}
+    </tbody></table></div>`;
     panel.innerHTML = `<p class="eyebrow">Organiser · scorecard</p>
       <div class="scorecard">
         <div class="sc-top"><span class="sc-title">Albert Park Open Scorecard</span><span class="sc-status" id="scStatus">Scores save as you type</span></div>
-        ${rowsFor(0, false)}
-        ${rowsFor(9, true)}
+        ${golfCourses(rowsFor)}
+        ${grand}
         <div class="sc-foot">
-          <span class="sc-status">Enter strokes per hole (1–20). Par is optional; fill all 18 to show scores to par.</span>
+          <span class="sc-status">Enter strokes per hole (1–20). Par is optional; fill all ${HOLES} to show scores to par.</span>
           <button class="btn danger" type="button" id="scClear">Clear card</button>
         </div>
         <div id="golfTbBox"></div>
@@ -1447,8 +1471,9 @@ footer { position: relative; z-index: 1; text-align: center; color: var(--muted)
     const fill = (key, arr) => {
       const n = nums(arr);
       const part = (a, b) => { const xs = n.slice(a, b).filter(v => v != null); return xs.length ? sum(xs) : ""; };
-      const set = (suffix, v) => { const el = document.querySelector(`[data-sum="${key}-${suffix}"]`); if (el) el.textContent = v; };
-      set("out", part(0, 9)); set("in", part(9, 18)); set("tot", part(0, 18));
+      const set = (suffix, v) => document.querySelectorAll(`[data-sum="${key}-${suffix}"]`).forEach(el => { el.textContent = v; });
+      GOLF_COURSES.forEach((_, ci) => { const b = ci * 18; set(`${ci}-out`, part(b, b + 9)); set(`${ci}-in`, part(b + 9, b + 18)); set(`${ci}-tot`, part(b, b + 18)); });
+      set("all", part(0, HOLES));
     };
     fill("par", S.golf.par);
     COMPETITORS.forEach(c => fill(c.id, S.golf.holes[c.id]));
